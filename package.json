@@ -1,0 +1,25 @@
+{
+  "name": "next-auth-adapter-edgedb",
+  "version": "0.0.1",
+  "description": "",
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "edgedb": "^0.19.1",
+    "edgeql-js": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^17.0.18",
+    "@types/react": "^17.0.39",
+    "next-auth": "^4.2.1",
+    "typescript": "^4.5.5"
+  }
+}

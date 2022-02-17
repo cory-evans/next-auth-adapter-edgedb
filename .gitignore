@@ -1,0 +1,7 @@
+node_modules/
+
+dist/
+
+src/dbschema/edgeql-js/
+
+tsconfig.tsbuildinfo
