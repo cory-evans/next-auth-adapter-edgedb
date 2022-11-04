@@ -1,231 +1,276 @@
-import type { Client } from 'edgedb'
-import type { Account } from 'next-auth'
-import type { Adapter, AdapterUser, AdapterSession, VerificationToken } from 'next-auth/adapters'
+import { $, Client } from "edgedb";
+import type {
+  Adapter,
+  AdapterUser,
+  AdapterSession,
+  VerificationToken,
+  AdapterAccount,
+} from "next-auth/adapters";
 
-import type edgeql from './dbschema/edgeql-js'
+import edgeql from "./dbschema/edgeql-js";
 
-type EdgeQl = typeof edgeql
+type EdgeQl = typeof edgeql;
 
 const userProperties = {
-	id: true,
-	name: true,
-	email: true,
-	emailVerified: true,
-	image: true,
-	phone: true,
-	role: true,
-}
+  id: true,
+  name: true,
+  email: true,
+  emailVerified: true,
+  image: true,
+  phone: true,
+  role: true,
+};
 
-const getUserByID = async (c: Client, e: EdgeQl, id: string): Promise<AdapterUser | null> => {
-	const user = await e.select(e.User.assert_single(), (u) => ({
-		...userProperties,
-		filter: e.op(u.id, '=', e.uuid(id))
-	})).run(c)
+const getUserByID = async (
+  c: Client,
+  e: EdgeQl,
+  id: string
+): Promise<AdapterUser | null> => {
+  const user = await e
+    .select(e.User.assert_single(), (u) => ({
+      ...userProperties,
+      filter: e.op(u.id, "=", e.uuid(id)),
+    }))
+    .run(c);
 
-	if (!user) {
-		return null
-	}
+  if (!user) {
+    return null;
+  }
 
-	return user as AdapterUser
-}
+  return user as AdapterUser;
+};
 
-const getSessionByID = async (c: Client, e: EdgeQl, id: string): Promise<AdapterSession | null> => {
-	const s = await e.select(e.Session.assert_single(), (s) => ({
-		id: true,
-		sessionToken: true,
-		userId: true,
-		expires: true,
-		filter: e.op(s.id, '=', e.uuid(id))
-	})).run(c)
+const getSessionByID = async (
+  c: Client,
+  e: EdgeQl,
+  id: string
+): Promise<AdapterSession | null> => {
+  const s = await e
+    .select(e.Session.assert_single(), (s) => ({
+      id: true,
+      sessionToken: true,
+      userId: true,
+      expires: true,
+      filter: e.op(s.id, "=", e.uuid(id)),
+    }))
+    .run(c);
 
-	if (!s) return null
-	if (!s.userId) return null
-	if (!s.sessionToken) return null
+  if (!s) return null;
+  if (!s.userId) return null;
+  if (!s.sessionToken) return null;
 
-	return s as AdapterSession
-}
+  return s as AdapterSession;
+};
 
-export function EdgeDBAdapter(c: Client, e: EdgeQl): Adapter {
-	return {
-		createUser: async (data) => {
-			const row = await e.insert(e.User, data).run(c)
+export function EdgeDBAdapter(client: Client, e: EdgeQl): Adapter {
+  return {
+    createUser: async (data) => {
+      const row = await e.insert(e.User, data).run(client);
 
-			const user = e.select(e.User.assert_single(), (u) => ({
-				...userProperties,
-				filter: e.op(u.id, '=', e.uuid(row.id))
-			})).run(c)
+      const user = e
+        .select(e.User.assert_single(), (u) => ({
+          ...userProperties,
+          filter: e.op(u.id, "=", e.uuid(row.id)),
+        }))
+        .run(client);
 
-			return user as Promise<AdapterUser>
-		},
-		getUser: async (id) => {
-			return getUserByID(c, e, id)
-		},
-		getUserByEmail: async (email) => {
-			const user = e.select(e.User.assert_single(), (u) => ({
-				...userProperties,
-				filter: e.op(u.email, '=', email)
-			})).run(c)
-		
-			return user as Promise<AdapterUser | null>
-		},
-		getUserByAccount: async (account) => {			
-			const acc = await e.select(e.Account.assert_single(), (a) => ({
-				userId: true,
-				filter: e.op(
-					e.op(a.provider, '=', account.provider),
-					'and',
-					e.op(a.providerAccountId, '=', account.providerAccountId)
-				)
-			})).run(c)
+      return user as Promise<AdapterUser>;
+    },
+    getUser: async (id) => {
+      return getUserByID(client, e, id);
+    },
+    getUserByEmail: async (email) => {
+      const user = e
+        .select(e.User.assert_single(), (u) => ({
+          ...userProperties,
+          filter: e.op(u.email, "=", email),
+        }))
+        .run(client);
 
-			if (!acc || !acc.userId) {
-				return null
-			}
+      return user as Promise<AdapterUser | null>;
+    },
+    getUserByAccount: async (account) => {
+      const acc = await e
+        .select(e.Account.assert_single(), (a) => ({
+          userId: true,
+          filter: e.op(
+            e.op(a.provider, "=", account.provider),
+            "and",
+            e.op(a.providerAccountId, "=", account.providerAccountId)
+          ),
+        }))
+        .run(client);
 
-			return getUserByID(c, e, acc.userId)
-		},
-		updateUser: async (data) => {
-			if (data.id === undefined) {
-				throw new Error("Can't update user without id")
-			}
+      if (!acc || !acc.userId) {
+        return null;
+      }
 
-			const row = await e.update(e.User, (u) => ({
-				filter: e.op(u.id, '=', e.uuid(data.id as string)),
-				set: {
-					...data
-				},
-			})).run(c)
+      return getUserByID(client, e, acc.userId);
+    },
+    updateUser: async (data) => {
+      if (data.id === undefined) {
+        throw new Error("Can't update user without id");
+      }
 
-			if (!row) {
-				throw new Error("User not found")
-			}
+      const row = await e
+        .update(e.User.assert_single(), (u) => ({
+          filter: e.op(u.id, "=", e.uuid(data.id as string)),
+          set: {
+            ...data,
+          },
+        }))
+        .run(client);
 
-			const u = await getUserByID(c, e, row.id)
-			if (!u) throw new Error("Failed to get user")
-			return u
-		},
-		deleteUser: async (id) => {
-			e.delete(e.User, (u) => ({
-				filter: e.op(u.id, '=', e.uuid(id))
-			})).run(c)
-		},
-		linkAccount: async (data) => {
-			const row = await e.insert(e.Account, data).run(c)
-			
-			const acc = e.select(e.Account.assert_single(), a => ({
-				type: true,
-				provider: true,
-				providerAccountId: true,
-				refresh_token: true,
-				access_token: true,
-				expires_at: true,
-				token_type: true,
-				scope: true,
-				id_token: true,
-				session_state: true,
-				userId: true,
+      if (!row) {
+        throw new Error("User not found");
+      }
 
-				filter: e.op(a.id, '=', e.uuid(row.id))
-			})).run(c)
+      const u = await getUserByID(client, e, row[0].id);
+      if (!u) throw new Error("Failed to get user");
+      return u;
+    },
+    deleteUser: async (id) => {
+      e.delete(e.User, (u) => ({
+        filter: e.op(u.id, "=", e.uuid(id)),
+      })).run(client);
+    },
+    linkAccount: async (data) => {
+      const row = await e.insert(e.Account, data as any).run(client);
 
-			return acc as Promise<Account>
-		},
-		unlinkAccount: async (data) => {
-			
-		},
-		getSessionAndUser: async (sessionToken) => {
-			const session = await e.select(e.Session.assert_single(), (s) => ({
-				id: true,
-				sessionToken: true,
-				expires: true,
-				userId: true,
-				filter: e.op(s.sessionToken, '=', sessionToken),
-			})).run(c)
+      const acc = e
+        .select(e.Account.assert_single(), (a) => ({
+          type: true,
+          provider: true,
+          providerAccountId: true,
+          refresh_token: true,
+          access_token: true,
+          expires_at: true,
+          token_type: true,
+          scope: true,
+          id_token: true,
+          session_state: true,
+          userId: true,
 
-			if (!session || !session.id || !session.expires || !session.userId || !session.sessionToken) {
-				return null
-			}
+          filter: e.op(a.id, "=", e.uuid(row.id)),
+        }))
+        .run(client);
 
-			if (session.sessionToken === null) return null
-			if (session.expires === null) return null
-			
-			const user = await getUserByID(c, e, session.userId)
-			
-			if (!user) {
-				return null
-			}
+      return acc as Promise<AdapterAccount>;
+    },
+    unlinkAccount: async (data) => {},
+    getSessionAndUser: async (sessionToken) => {
+      const session = await e
+        .select(e.Session.assert_single(), (s) => ({
+          id: true,
+          sessionToken: true,
+          expires: true,
+          userId: true,
+          filter: e.op(s.sessionToken, "=", sessionToken),
+        }))
+        .run(client);
 
-			return {
-				session: session as AdapterSession,  // TODO: fix this
-				user: user
-			}
-		},
-		createSession: async (data) => {
-			const row = await e.insert(e.Session, data).run(c)
-			const s = await getSessionByID(c, e, row.id)
-			if (!s) {
-				throw new Error("Failed to create session")
-			}
+      if (
+        !session ||
+        !session.id ||
+        !session.expires ||
+        !session.userId ||
+        !session.sessionToken
+      ) {
+        return null;
+      }
 
-			return s
-		},
-		updateSession: async (data) => {
-			const row = await e.update(e.Session, (s) => ({
-				filter: e.op(s.sessionToken, '=', data.sessionToken),
-				set: {
-					...data
-				},
-			})).run(c)
+      if (session.sessionToken === null) return null;
+      if (session.expires === null) return null;
 
-			if (!row) return null
+      const user = await getUserByID(client, e, session.userId);
 
-			const u = getSessionByID(c, e, row.id)
-			if (!u) throw new Error("Failed to get session")
-			return u
-		},
-		deleteSession: async (sessionToken) => {
-			e.delete(e.Session, (s) => ({
-				filter: e.op(s.sessionToken, '=', sessionToken)
-			})).run(c)
-		},
-		createVerificationToken: async (data) => {
-			const row = await e.insert(e.VerificationToken, data).run(c)
-			const vt = await e.select(e.VerificationToken.assert_single(), (vt) => ({
-			identifier: true,
-			token: true,
-				expires: true,
-				filter: e.op(vt.id, '=', e.uuid(row.id))
-			})).run(c)
+      if (!user) {
+        return null;
+      }
 
-			if (!vt) {
-				throw new Error("Failed to create verification token")
-			}
+      return {
+        session: session as AdapterSession, // TODO: fix this
+        user: user,
+      };
+    },
+    createSession: async (data) => {
+      const row = await e.insert(e.Session, data).run(client);
+      const s = await getSessionByID(client, e, row.id);
+      if (!s) {
+        throw new Error("Failed to create session");
+      }
 
-			return vt as VerificationToken
-		},
-		useVerificationToken: async (token) => {
-			// select then delete
-			const vToken = await e.select(e.VerificationToken.assert_single(), (vt) => ({
-				id: true,
-				identifier: true,
-				token: true,
-				expires: true,
-				filter: e.op(
-					e.op(vt.token, '=', token.token),
-					'and',
-					e.op(vt.identifier, '=', token.identifier)
-				)
-			})).run(c)
+      return s;
+    },
+    updateSession: async (data) => {
+      const row = await e
+        .update(e.Session.assert_single(), (s) => ({
+          filter: e.op(s.sessionToken, "=", data.sessionToken),
+          set: {
+            ...data,
+          },
+        }))
+        .run(client);
 
-			if (!vToken) {
-				return null
-			}
+      if (!row) return null;
 
-			e.delete(e.VerificationToken, (vt) => ({
-				filter: e.op(vt.id, '=', e.uuid(vToken.id))
-			})).run(c)
+      const u = getSessionByID(client, e, row[0].id);
+      if (!u) throw new Error("Failed to get session");
+      return u;
+    },
+    deleteSession: async (sessionToken) => {
+      e.delete(e.Session, (s) => ({
+        filter: e.op(s.sessionToken, "=", sessionToken),
+      })).run(client);
+    },
+    createVerificationToken: async (data) => {
+      const row = await e
+        .insert(e.VerificationToken, {
+          expires: data.expires,
+          identifier: data.identifier,
+          token: data.token,
+        })
+        .run(client);
+      const vt = await e
+        .select(e.VerificationToken.assert_single(), (vt) => ({
+          identifier: true,
+          token: true,
+          expires: true,
+          filter: e.op(vt.id, "=", e.uuid(row.id)),
+        }))
+        .run(client);
 
-			return vToken as VerificationToken
-		}
-	}
+      if (!vt) {
+        throw new Error("Failed to create verification token");
+      }
+
+      return vt as VerificationToken;
+    },
+    useVerificationToken: async (token) => {
+      // select then delete
+      const vToken = await e
+        .select(e.VerificationToken.assert_single(), (vt) => ({
+          id: true,
+          identifier: true,
+          token: true,
+          expires: true,
+          filter: e.op(
+            e.op(vt.token, "=", token.token),
+            "and",
+            e.op(vt.identifier, "=", token.identifier)
+          ),
+        }))
+        .run(client);
+
+      if (!vToken) {
+        return null;
+      }
+
+      e.delete(e.VerificationToken, (vt) => ({
+        filter: e.op(vt.id, "=", e.uuid(vToken.id)),
+      })).run(client);
+
+      return vToken as VerificationToken;
+    },
+  };
 }
